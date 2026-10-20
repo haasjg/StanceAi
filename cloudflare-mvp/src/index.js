@@ -129,8 +129,10 @@ async function handleApi(request, env) {
     const body = await file.text();
     if (new TextEncoder().encode(body).length !== file.size) return fail("The file could not be read as text.");
     if (current.total + file.size > MAX_USER_DOCUMENT_BYTES || current.count >= 10) return fail("Your document library is full. Remove a document before adding another.", 413);
-    await env.DB.prepare("INSERT INTO documents (id, user_id, name, body) VALUES (?, ?, ?, ?)").bind(uuid(), user.id, file.name.slice(0, 120), body).run();
-    return json({ ok: true });
+    const id = uuid();
+    const name = file.name.slice(0, 120);
+    await env.DB.prepare("INSERT INTO documents (id, user_id, name, body) VALUES (?, ?, ?, ?)").bind(id, user.id, name, body).run();
+    return json({ ok: true, document: { id, name } });
   }
   if (request.method === "DELETE" && path.startsWith("/api/documents/")) {
     await env.DB.prepare("DELETE FROM documents WHERE id = ? AND user_id = ?").bind(path.slice("/api/documents/".length), user.id).run();
