@@ -4,7 +4,8 @@ const appScreen = $("#app-screen");
 let signup = false;
 let busy = false;
 let currentConversationId = "";
-let selectedDocumentIds = null;
+let selectedDocumentIds = new Set();
+let documentsLoaded = false;
 
 async function api(path, options = {}) {
   const response = await fetch(`/api/${path}`, { credentials: "same-origin", ...options });
@@ -30,7 +31,7 @@ function showApp() { authScreen.classList.add("hidden"); appScreen.classList.rem
 function showAuth() { appScreen.classList.add("hidden"); authScreen.classList.remove("hidden"); }
 async function loadDocuments() {
   const { documents } = await api("documents");
-  if (selectedDocumentIds === null) selectedDocumentIds = new Set(documents.map((doc) => doc.id));
+  if (!documentsLoaded) { selectedDocumentIds = new Set(documents.map((doc) => doc.id)); documentsLoaded = true; }
   else for (const id of selectedDocumentIds) if (!documents.some((doc) => doc.id === id)) selectedDocumentIds.delete(id);
   const list = $("#document-list"); list.replaceChildren();
   for (const doc of documents) {
@@ -94,7 +95,7 @@ async function loadMessages() {
   for (const item of messages) addMessage(item.role, item.body);
 }
 async function boot() {
-  try { await api("me"); showApp(); currentConversationId = ""; await Promise.all([loadDocuments(), renderConversations()]); }
+  try { await api("me"); showApp(); currentConversationId = ""; selectedDocumentIds = new Set(); documentsLoaded = false; await Promise.all([loadDocuments(), renderConversations()]); }
   catch { showAuth(); }
 }
 
@@ -122,18 +123,19 @@ $("#new-conversation").addEventListener("click", async () => {
 $("#document-file").addEventListener("change", async (event) => {
   const file = event.target.files?.[0]; if (!file) return;
   const form = new FormData(); form.append("file", file);
-  try { await api("documents", { method: "POST", body: form }); await loadDocuments(); showToast("Source added to your workspace."); }
+  try { const { document } = await api("documents", { method: "POST", body: form }); selectedDocumentIds.add(document.id); await loadDocuments(); showToast("Source added to your workspace."); }
   catch (error) { showToast(error.message); }
   finally { event.target.value = ""; }
 });
 $("#chat-form").addEventListener("submit", async (event) => {
   event.preventDefault(); if (busy) return;
   const input = $("#chat-input"); const prompt = input.value.trim(); if (!prompt) return;
+  const conversationId = currentConversationId;
   input.value = ""; addMessage("user", prompt); busy = true;
   const button = $("#send-button"); button.disabled = true;
   const thinking = document.createElement("p"); thinking.className = "thinking"; thinking.textContent = "Thinking through it…"; $("#messages").append(thinking);
-  try { const result = await api("chat", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ message: prompt, conversationId: currentConversationId, documentIds: [...selectedDocumentIds] }) }); thinking.remove(); addMessage("assistant", result.answer); $("#usage-label").textContent = `${result.remaining} free messages left today`; await renderConversations(); }
-  catch (error) { thinking.remove(); addMessage("assistant", error.message); }
+  try { const result = await api("chat", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ message: prompt, conversationId, documentIds: [...selectedDocumentIds] }) }); thinking.remove(); if (currentConversationId === conversationId) addMessage("assistant", result.answer); $("#usage-label").textContent = `${result.remaining} free messages left today`; await renderConversations(); }
+  catch (error) { thinking.remove(); if (currentConversationId === conversationId) addMessage("assistant", error.message); }
   finally { busy = false; button.disabled = false; input.focus(); }
 });
 $("#messages").addEventListener("click", (event) => { const button = event.target.closest("[data-prompt]"); if (button) { $("#chat-input").value = button.dataset.prompt; $("#chat-input").focus(); } });
