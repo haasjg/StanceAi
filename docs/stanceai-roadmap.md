@@ -26,6 +26,7 @@ An operator can create a versioned analysis pipeline, provide a legal document a
 ### 1. Stable analysis API and jobs
 
 - Keep StanceAI customer API credentials separate from `org_api_keys`, which stores encrypted model-provider secrets. Store only a verifier/hash for customer tokens and bind each token to an organization, scopes, expiry, and revocation state.
+- **Started:** organization admins can create one-time-view API tokens, list metadata, and revoke keys; `GET /v1/me` verifies bearer credentials and scopes. Pipeline discovery and analysis submission/results are still to build.
 - Reuse the existing durable `db_jobs` runner for asynchronous analyses and persist the API-facing job/result record with tenant ownership and idempotency; do not expose internal queue records directly.
 - Publish versioned endpoints for pipeline discovery, run creation, status, results, and cancellation.
 - Support input by secure uploaded file and signed URL, output schema, language, metadata, and API version.
