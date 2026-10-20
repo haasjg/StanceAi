@@ -4,6 +4,7 @@ const appScreen = $("#app-screen");
 let signup = false;
 let busy = false;
 let currentConversationId = "";
+let currentProjectId = "";
 let selectedDocumentIds = new Set();
 let documentsLoaded = false;
 
@@ -30,7 +31,7 @@ function addMessage(role, text) {
 function showApp() { authScreen.classList.add("hidden"); appScreen.classList.remove("hidden"); }
 function showAuth() { appScreen.classList.add("hidden"); authScreen.classList.remove("hidden"); }
 async function loadDocuments() {
-  const { documents } = await api("documents");
+  const { documents } = await api(`documents?projectId=${encodeURIComponent(currentProjectId)}`);
   if (!documentsLoaded) { selectedDocumentIds = new Set(documents.map((doc) => doc.id)); documentsLoaded = true; }
   else for (const id of selectedDocumentIds) if (!documents.some((doc) => doc.id === id)) selectedDocumentIds.delete(id);
   const list = $("#document-list"); list.replaceChildren();
@@ -49,8 +50,17 @@ async function loadDocuments() {
     list.append(li);
   }
 }
+async function loadProjects() {
+  const { projects } = await api("projects");
+  if (!projects.some((project) => project.id === currentProjectId)) currentProjectId = projects[0]?.id || "";
+  const select = $("#project-select"); select.replaceChildren();
+  for (const project of projects) {
+    const option = document.createElement("option"); option.value = project.id; option.textContent = project.name; select.append(option);
+  }
+  select.value = currentProjectId;
+}
 async function renderConversations() {
-  const { conversations } = await api("conversations");
+  const { conversations } = await api(`conversations?projectId=${encodeURIComponent(currentProjectId)}`);
   const list = $("#conversation-list"); list.replaceChildren();
   for (const conversation of conversations) {
     const li = document.createElement("li"); li.className = "conversation-item";
@@ -95,7 +105,7 @@ async function loadMessages() {
   for (const item of messages) addMessage(item.role, item.body);
 }
 async function boot() {
-  try { await api("me"); showApp(); currentConversationId = ""; selectedDocumentIds = new Set(); documentsLoaded = false; await Promise.all([loadDocuments(), renderConversations()]); }
+  try { await api("me"); showApp(); currentConversationId = ""; currentProjectId = ""; selectedDocumentIds = new Set(); documentsLoaded = false; await loadProjects(); await Promise.all([loadDocuments(), renderConversations()]); }
   catch { showAuth(); }
 }
 
@@ -117,12 +127,28 @@ $("#auth-form").addEventListener("submit", async (event) => {
 });
 $("#logout").addEventListener("click", async () => { await api("logout", { method: "POST" }); $("#messages").innerHTML = $("#welcome")?.outerHTML || ""; showAuth(); });
 $("#new-conversation").addEventListener("click", async () => {
-  try { const { conversation } = await api("conversations", { method: "POST" }); currentConversationId = conversation.id; await renderConversations(); $("#chat-input").focus(); }
+  try { const { conversation } = await api("conversations", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ projectId: currentProjectId }) }); currentConversationId = conversation.id; await renderConversations(); $("#chat-input").focus(); }
+  catch (error) { showToast(error.message); }
+});
+$("#project-select").addEventListener("change", async (event) => {
+  currentProjectId = event.target.value; currentConversationId = ""; selectedDocumentIds = new Set(); documentsLoaded = false;
+  try { await Promise.all([loadDocuments(), renderConversations()]); }
+  catch (error) { showToast(error.message); }
+});
+$("#new-project").addEventListener("click", async () => {
+  const name = window.prompt("Name this project or matter"); if (!name?.trim()) return;
+  try { const { project } = await api("projects", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ name }) }); currentProjectId = project.id; currentConversationId = ""; await loadProjects(); selectedDocumentIds = new Set(); documentsLoaded = false; await Promise.all([loadDocuments(), renderConversations()]); }
+  catch (error) { showToast(error.message); }
+});
+$("#rename-project").addEventListener("click", async () => {
+  const select = $("#project-select"); const currentName = select.selectedOptions[0]?.textContent || "";
+  const name = window.prompt("Rename project or matter", currentName); if (!name?.trim()) return;
+  try { await api(`projects/${encodeURIComponent(currentProjectId)}`, { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ name }) }); await loadProjects(); }
   catch (error) { showToast(error.message); }
 });
 $("#document-file").addEventListener("change", async (event) => {
   const file = event.target.files?.[0]; if (!file) return;
-  const form = new FormData(); form.append("file", file);
+  const form = new FormData(); form.append("file", file); form.append("projectId", currentProjectId);
   try { const { document } = await api("documents", { method: "POST", body: form }); selectedDocumentIds.add(document.id); await loadDocuments(); showToast("Source added to your workspace."); }
   catch (error) { showToast(error.message); }
   finally { event.target.value = ""; }
