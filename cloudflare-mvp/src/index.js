@@ -63,7 +63,9 @@ async function handleApi(request, env) {
       const user = { id: uuid(), email };
       const salt = randomHex();
       await env.DB.prepare("INSERT INTO users (id, email, salt, password_hash) VALUES (?, ?, ?, ?)").bind(user.id, email, salt, await passwordHash(password, salt)).run();
-      await env.DB.prepare("INSERT INTO conversations (id, user_id, title) VALUES (?, ?, 'New conversation')").bind(uuid(), user.id).run();
+      const projectId = uuid();
+      await env.DB.prepare("INSERT INTO projects (id, user_id, name) VALUES (?, ?, 'My workspace')").bind(projectId, user.id).run();
+      await env.DB.prepare("INSERT INTO conversations (id, user_id, project_id, title) VALUES (?, ?, ?, 'New conversation')").bind(uuid(), user.id, projectId).run();
       return issueSession(user, env);
     }
     const user = await env.DB.prepare("SELECT id, email, salt, password_hash FROM users WHERE email = ?").bind(email).first();
@@ -74,17 +76,52 @@ async function handleApi(request, env) {
 
   const user = await userFor(request, env);
   if (!user) return fail("Please sign in to continue.", 401);
+  if (request.method === "GET" && path === "/api/projects") {
+    let projects = await env.DB.prepare("SELECT id, name, created_at, updated_at FROM projects WHERE user_id = ? ORDER BY updated_at DESC LIMIT 50").bind(user.id).all();
+    if (!projects.results.length) {
+      const id = uuid();
+      await env.DB.prepare("INSERT INTO projects (id, user_id, name) VALUES (?, ?, 'My workspace')").bind(id, user.id).run();
+      projects = await env.DB.prepare("SELECT id, name, created_at, updated_at FROM projects WHERE user_id = ? ORDER BY updated_at DESC LIMIT 50").bind(user.id).all();
+    }
+    return json({ projects: projects.results });
+  }
+  if (request.method === "POST" && path === "/api/projects") {
+    let input;
+    try { input = await request.json(); } catch { return fail("Enter a project name."); }
+    const name = String(input.name || "").trim().slice(0, 80);
+    if (!name) return fail("Project names cannot be empty.");
+    const id = uuid();
+    await env.DB.prepare("INSERT INTO projects (id, user_id, name) VALUES (?, ?, ?)").bind(id, user.id, name).run();
+    return json({ project: { id, name } }, 201);
+  }
+  if (path.startsWith("/api/projects/") && request.method === "PATCH") {
+    const id = decodeURIComponent(path.slice("/api/projects/".length));
+    let input;
+    try { input = await request.json(); } catch { return fail("Enter a project name."); }
+    const name = String(input.name || "").trim().slice(0, 80);
+    if (!name) return fail("Project names cannot be empty.");
+    const result = await env.DB.prepare("UPDATE projects SET name = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND user_id = ?").bind(name, id, user.id).run();
+    if (!result.meta.changes) return fail("Project not found.", 404);
+    return json({ ok: true, name });
+  }
   if (request.method === "GET" && path === "/api/conversations") {
-    let conversations = await env.DB.prepare("SELECT id, title, created_at, updated_at FROM conversations WHERE user_id = ? ORDER BY updated_at DESC LIMIT 50").bind(user.id).all();
+    const projectId = new URL(request.url).searchParams.get("projectId") || "";
+    const project = await env.DB.prepare("SELECT id FROM projects WHERE id = ? AND user_id = ?").bind(projectId, user.id).first();
+    if (!project) return fail("Project not found.", 404);
+    let conversations = await env.DB.prepare("SELECT id, title, created_at, updated_at FROM conversations WHERE user_id = ? AND project_id = ? ORDER BY updated_at DESC LIMIT 50").bind(user.id, projectId).all();
     if (!conversations.results.length) {
-      await env.DB.prepare("INSERT INTO conversations (id, user_id, title) VALUES (?, ?, 'New conversation')").bind(uuid(), user.id).run();
-      conversations = await env.DB.prepare("SELECT id, title, created_at, updated_at FROM conversations WHERE user_id = ? ORDER BY updated_at DESC LIMIT 50").bind(user.id).all();
+      await env.DB.prepare("INSERT INTO conversations (id, user_id, project_id, title) VALUES (?, ?, ?, 'New conversation')").bind(uuid(), user.id, projectId).run();
+      conversations = await env.DB.prepare("SELECT id, title, created_at, updated_at FROM conversations WHERE user_id = ? AND project_id = ? ORDER BY updated_at DESC LIMIT 50").bind(user.id, projectId).all();
     }
     return json({ conversations: conversations.results });
   }
   if (request.method === "POST" && path === "/api/conversations") {
+    let input;
+    try { input = await request.json(); } catch { return fail("Choose a project for this conversation."); }
+    const projectId = String(input.projectId || "");
+    if (!await env.DB.prepare("SELECT id FROM projects WHERE id = ? AND user_id = ?").bind(projectId, user.id).first()) return fail("Project not found.", 404);
     const id = uuid();
-    await env.DB.prepare("INSERT INTO conversations (id, user_id, title) VALUES (?, ?, 'New conversation')").bind(id, user.id).run();
+    await env.DB.prepare("INSERT INTO conversations (id, user_id, project_id, title) VALUES (?, ?, ?, 'New conversation')").bind(id, user.id, projectId).run();
     return json({ conversation: { id, title: "New conversation" } }, 201);
   }
   if (path.startsWith("/api/conversations/")) {
@@ -111,7 +148,9 @@ async function handleApi(request, env) {
   }
   if (request.method === "GET" && path === "/api/me") return json({ user: { email: user.email } });
   if (request.method === "GET" && path === "/api/documents") {
-    const docs = await env.DB.prepare("SELECT id, name, created_at FROM documents WHERE user_id = ? ORDER BY created_at DESC").bind(user.id).all();
+    const projectId = new URL(request.url).searchParams.get("projectId") || "";
+    if (!await env.DB.prepare("SELECT id FROM projects WHERE id = ? AND user_id = ?").bind(projectId, user.id).first()) return fail("Project not found.", 404);
+    const docs = await env.DB.prepare("SELECT id, name, created_at FROM documents WHERE user_id = ? AND project_id = ? ORDER BY created_at DESC").bind(user.id, projectId).all();
     return json({ documents: docs.results });
   }
   if (request.method === "GET" && path.startsWith("/api/documents/")) {
@@ -125,13 +164,15 @@ async function handleApi(request, env) {
     if (!(file instanceof File)) return fail("Choose a text, Markdown, or CSV file.");
     if (file.size < 1 || file.size > MAX_DOCUMENT_BYTES) return fail("Each document must be between 1 byte and 25 KB.");
     if (!/\.(txt|md|csv)$/i.test(file.name)) return fail("Only .txt, .md, and .csv files are supported right now.");
-    const current = await env.DB.prepare("SELECT COALESCE(SUM(length(body)), 0) AS total, COUNT(*) AS count FROM documents WHERE user_id = ?").bind(user.id).first();
+    const projectId = String(form.get("projectId") || "");
+    if (!await env.DB.prepare("SELECT id FROM projects WHERE id = ? AND user_id = ?").bind(projectId, user.id).first()) return fail("Project not found.", 404);
+    const current = await env.DB.prepare("SELECT COALESCE(SUM(length(body)), 0) AS total, COUNT(*) AS count FROM documents WHERE user_id = ? AND project_id = ?").bind(user.id, projectId).first();
     const body = await file.text();
     if (new TextEncoder().encode(body).length !== file.size) return fail("The file could not be read as text.");
     if (current.total + file.size > MAX_USER_DOCUMENT_BYTES || current.count >= 10) return fail("Your document library is full. Remove a document before adding another.", 413);
     const id = uuid();
     const name = file.name.slice(0, 120);
-    await env.DB.prepare("INSERT INTO documents (id, user_id, name, body) VALUES (?, ?, ?, ?)").bind(id, user.id, name, body).run();
+    await env.DB.prepare("INSERT INTO documents (id, user_id, project_id, name, body) VALUES (?, ?, ?, ?, ?)").bind(id, user.id, projectId, name, body).run();
     return json({ ok: true, document: { id, name } });
   }
   if (request.method === "DELETE" && path.startsWith("/api/documents/")) {
@@ -151,15 +192,15 @@ async function handleApi(request, env) {
     const prompt = String(input.message || "").trim();
     if (!prompt || prompt.length > 4_000) return fail("Messages must be between 1 and 4,000 characters.");
     const conversationId = String(input.conversationId || "");
-    const conversation = await env.DB.prepare("SELECT id, title FROM conversations WHERE id = ? AND user_id = ?").bind(conversationId, user.id).first();
+    const conversation = await env.DB.prepare("SELECT id, title, project_id FROM conversations WHERE id = ? AND user_id = ?").bind(conversationId, user.id).first();
     if (!conversation) return fail("Choose a conversation before sending a message.");
     const requestedDocumentIds = Array.isArray(input.documentIds) ? [...new Set(input.documentIds.map((id) => String(id)))] : null;
     if (requestedDocumentIds?.length > 10) return fail("Choose no more than 10 source documents.");
     const docs = requestedDocumentIds === null
-      ? await env.DB.prepare("SELECT name, body FROM documents WHERE user_id = ? ORDER BY created_at DESC LIMIT 10").bind(user.id).all()
+      ? await env.DB.prepare("SELECT name, body FROM documents WHERE user_id = ? AND project_id = ? ORDER BY created_at DESC LIMIT 10").bind(user.id, conversation.project_id).all()
       : requestedDocumentIds.length
-        ? await env.DB.prepare(`SELECT name, body FROM documents WHERE user_id = ? AND id IN (${requestedDocumentIds.map(() => "?").join(",")}) ORDER BY created_at DESC`)
-          .bind(user.id, ...requestedDocumentIds).all()
+        ? await env.DB.prepare(`SELECT name, body FROM documents WHERE user_id = ? AND project_id = ? AND id IN (${requestedDocumentIds.map(() => "?").join(",")}) ORDER BY created_at DESC`)
+          .bind(user.id, conversation.project_id, ...requestedDocumentIds).all()
         : { results: [] };
     if (requestedDocumentIds !== null && docs.results.length !== requestedDocumentIds.length) return fail("One or more selected source documents are no longer available.", 400);
     const today = new Date().toISOString().slice(0, 10);
