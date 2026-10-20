@@ -47,6 +47,17 @@ async function handleApi(request, env) {
     const password = String(input.password || "");
     if (!/^\S+@\S+\.\S+$/.test(email) || email.length > 254) return fail("Enter a valid email address.");
     if (password.length < 10 || password.length > 128) return fail("Use a password between 10 and 128 characters.");
+    const now = Math.floor(Date.now() / 1000);
+    const windowSeconds = path === "/api/signup" ? 86_400 : 900;
+    const maximum = path === "/api/signup" ? 3 : 10;
+    const bucket = await hash(request.headers.get("CF-Connecting-IP") || "unknown");
+    await env.DB.prepare(`INSERT INTO auth_throttle (scope, bucket, window_start, attempts) VALUES (?, ?, ?, 1)
+      ON CONFLICT(scope, bucket) DO UPDATE SET
+      window_start = CASE WHEN window_start + ? <= ? THEN ? ELSE window_start END,
+      attempts = CASE WHEN window_start + ? <= ? THEN 1 ELSE attempts + 1 END`)
+      .bind(path, bucket, now, windowSeconds, now, now, windowSeconds, now).run();
+    const throttle = await env.DB.prepare("SELECT attempts FROM auth_throttle WHERE scope = ? AND bucket = ?").bind(path, bucket).first();
+    if (throttle.attempts > maximum) return fail("Too many attempts. Please wait before trying again.", 429);
     if (path === "/api/signup") {
       if (await env.DB.prepare("SELECT id FROM users WHERE email = ?").bind(email).first()) return fail("An account with that email already exists.", 409);
       const user = { id: uuid(), email };
@@ -99,8 +110,9 @@ async function handleApi(request, env) {
     const prompt = String(input.message || "").trim();
     if (!prompt || prompt.length > 4_000) return fail("Messages must be between 1 and 4,000 characters.");
     const today = new Date().toISOString().slice(0, 10);
-    const usage = await env.DB.prepare("SELECT count FROM usage_daily WHERE user_id = ? AND day = ?").bind(user.id, today).first();
-    if ((usage?.count || 0) >= 20) return fail("You’ve reached today’s free message limit. Try again tomorrow.", 429);
+    const reservation = await env.DB.prepare("INSERT INTO usage_daily (user_id, day, count) VALUES (?, ?, 1) ON CONFLICT(user_id, day) DO UPDATE SET count = count + 1 WHERE usage_daily.count < 20 RETURNING count")
+      .bind(user.id, today).first();
+    if (!reservation) return fail("You’ve reached today’s free message limit. Try again tomorrow.", 429);
     const docs = await env.DB.prepare("SELECT name, body FROM documents WHERE user_id = ? ORDER BY created_at DESC LIMIT 10").bind(user.id).all();
     const recent = await env.DB.prepare("SELECT role, body FROM messages WHERE user_id = ? ORDER BY created_at DESC LIMIT 10").bind(user.id).all();
     const documentContext = docs.results.map((doc) => `\n[${doc.name}]\n${doc.body}`).join("\n").slice(0, 18_000);
@@ -116,9 +128,8 @@ async function handleApi(request, env) {
     await env.DB.batch([
       env.DB.prepare("INSERT INTO messages (id, user_id, role, body) VALUES (?, ?, 'user', ?)").bind(uuid(), user.id, prompt),
       env.DB.prepare("INSERT INTO messages (id, user_id, role, body) VALUES (?, ?, 'assistant', ?)").bind(uuid(), user.id, answer),
-      env.DB.prepare("INSERT INTO usage_daily (user_id, day, count) VALUES (?, ?, 1) ON CONFLICT(user_id, day) DO UPDATE SET count = count + 1").bind(user.id, today),
     ]);
-    return json({ answer, remaining: 19 - (usage?.count || 0) });
+    return json({ answer, remaining: 20 - reservation.count });
   }
   return fail("Page not found.", 404);
 }
