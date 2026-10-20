@@ -13,7 +13,7 @@ const randomHex = (size = 16) => toHex(crypto.getRandomValues(new Uint8Array(siz
 const hash = async (value) => toHex(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value)));
 async function passwordHash(password, salt) {
   const key = await crypto.subtle.importKey("raw", new TextEncoder().encode(password), "PBKDF2", false, ["deriveBits"]);
-  return toHex(await crypto.subtle.deriveBits({ name: "PBKDF2", hash: "SHA-256", salt: new TextEncoder().encode(salt), iterations: 160_000 }, key, 256));
+  return toHex(await crypto.subtle.deriveBits({ name: "PBKDF2", hash: "SHA-256", salt: new TextEncoder().encode(salt), iterations: 100_000 }, key, 256));
 }
 function cookieValue(request, key) {
   const entry = (request.headers.get("cookie") || "").split(";").map((x) => x.trim()).find((x) => x.startsWith(`${key}=`));
@@ -49,7 +49,7 @@ async function handleApi(request, env) {
     if (password.length < 10 || password.length > 128) return fail("Use a password between 10 and 128 characters.");
     const now = Math.floor(Date.now() / 1000);
     const windowSeconds = path === "/api/signup" ? 86_400 : 900;
-    const maximum = path === "/api/signup" ? 3 : 10;
+    const maximum = path === "/api/signup" ? 10 : 20;
     const bucket = await hash(request.headers.get("CF-Connecting-IP") || "unknown");
     await env.DB.prepare(`INSERT INTO auth_throttle (scope, bucket, window_start, attempts) VALUES (?, ?, ?, 1)
       ON CONFLICT(scope, bucket) DO UPDATE SET
@@ -139,7 +139,10 @@ export default {
     const url = new URL(request.url);
     if (url.pathname.startsWith("/api/")) {
       try { return await handleApi(request, env); }
-      catch (error) { console.error("StanceAI request failed", error?.name || "Error"); return fail("Something went wrong. Please try again.", 500); }
+      catch (error) {
+        console.error("StanceAI request failed", error?.name || "Error", String(error?.message || "Unknown error").slice(0, 240));
+        return fail("Something went wrong. Please try again.", 500);
+      }
     }
     return env.ASSETS.fetch(request);
   },
