@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#f5f6f8">
+    <meta name="description" content="StanceAI helps you explore a question with your own source material.">
+    <title>StanceAI — think clearly</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/styles.css">
+    <script defer src="/app.js"></script>
+  </head>
+  <body>
+    <div id="auth-screen" class="auth-screen">
+      <section class="auth-card" aria-labelledby="brand-title">
+        <div class="brand-mark" aria-hidden="true">S</div>
+        <p class="eyebrow">A thinking space</p>
+        <h1 id="brand-title">Make room for<br><em>clearer thinking.</em></h1>
+        <p class="auth-copy">Explore a question, work through perspectives, and keep your sources close.</p>
+        <form id="auth-form" class="stack">
+          <label>Email address<input name="email" type="email" autocomplete="email" required maxlength="254" placeholder="you@example.com"></label>
+          <label>Password<input name="password" type="password" autocomplete="current-password" required minlength="10" maxlength="128" placeholder="At least 10 characters"></label>
+          <button id="auth-submit" class="button button-primary" type="submit">Sign in <span aria-hidden="true">↗</span></button>
+        </form>
+        <p id="auth-error" class="error-text" role="alert"></p>
+        <p class="switch-copy"><span id="switch-label">New to StanceAI?</span> <button type="button" id="auth-switch" class="text-button">Create an account</button></p>
+        <p class="fine-print">Private workspace. Your documents are only visible to your account.</p>
+      </section>
+      <aside class="auth-note"><span class="note-index">01 / REFLECT</span><p>“The beginning of wisdom is the definition of terms.”</p><span>— SOCRATES</span></aside>
+    </div>
+
+    <main id="app-screen" class="app-screen hidden">
+      <header class="topbar">
+        <a href="/" class="wordmark"><span class="brand-mark small">S</span><span>Stance<em>AI</em></span></a>
+        <div class="topbar-right"><span id="usage-label" class="usage-label">20 free messages today</span><button id="logout" class="text-button" type="button">Sign out</button></div>
+      </header>
+      <div class="workspace">
+        <aside class="sidebar">
+          <div class="side-heading"><span>YOUR SOURCES</span><label class="upload-button" for="document-file" aria-label="Add a document">+</label><input id="document-file" type="file" accept=".txt,.md,.csv,text/plain,text/markdown,text/csv" hidden></div>
+          <p class="side-help">Add notes or source files to ground your conversations.</p>
+          <ul id="document-list" class="document-list"></ul>
+          <div class="sidebar-bottom"><span class="online-dot"></span> Your private workspace</div>
+        </aside>
+        <section class="conversation" aria-label="StanceAI conversation">
+          <div id="messages" class="messages" aria-live="polite">
+            <div id="welcome" class="welcome">
+              <p class="eyebrow">THINK IT THROUGH</p>
+              <h1>What are you<br><em>working through?</em></h1>
+              <p>Ask a question or explore an idea. Add source documents on the left to include them in your conversation.</p>
+              <div class="suggestions"><button type="button" data-prompt="Help me understand the strongest arguments on each side of this question.">Explore both sides <span>↗</span></button><button type="button" data-prompt="Summarize the key ideas in my source documents and point out what is still unclear.">Find the key ideas <span>↗</span></button></div>
+            </div>
+          </div>
+          <form id="chat-form" class="composer-wrap">
+            <label class="sr-only" for="chat-input">Your message</label>
+            <textarea id="chat-input" rows="1" maxlength="4000" placeholder="Start with a question…" required></textarea>
+            <div class="composer-footer"><span>StanceAI can make mistakes. Check important claims against your sources.</span><button id="send-button" class="send-button" type="submit" aria-label="Send message">↑</button></div>
+          </form>
+          <p class="legal-note">For reflection and research only. Not legal advice.</p>
+        </section>
+      </div>
+      <div id="toast" class="toast" role="status"></div>
+    </main>
+  </body>
+</html>
