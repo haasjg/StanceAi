@@ -104,9 +104,19 @@ async function loadMessages() {
   $("#welcome")?.remove();
   for (const item of messages) addMessage(item.role, item.body);
 }
-async function boot() {
-  try { await api("me"); showApp(); currentConversationId = ""; currentProjectId = ""; selectedDocumentIds = new Set(); documentsLoaded = false; await loadProjects(); await Promise.all([loadDocuments(), renderConversations()]); }
-  catch { showAuth(); }
+async function boot(afterSignIn = false) {
+  try { await api("me"); }
+  catch {
+    showAuth();
+    if (afterSignIn) $("#auth-error").textContent = "Sign-in did not establish a session. Please try again.";
+    return;
+  }
+  showApp(); currentConversationId = ""; currentProjectId = ""; selectedDocumentIds = new Set(); documentsLoaded = false;
+  try { await loadProjects(); await Promise.all([loadDocuments(), renderConversations()]); }
+  catch (error) {
+    console.error("StanceAI workspace failed to load", error?.name || "Error");
+    showToast(`You’re signed in, but the workspace did not finish loading: ${error.message}`);
+  }
 }
 
 $("#auth-switch").addEventListener("click", () => {
@@ -121,7 +131,7 @@ $("#auth-form").addEventListener("submit", async (event) => {
   event.preventDefault(); if (busy) return; busy = true;
   const button = $("#auth-submit"); button.disabled = true; $("#auth-error").textContent = "";
   const payload = Object.fromEntries(new FormData(event.currentTarget));
-  try { await api(signup ? "signup" : "login", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(payload) }); await boot(); }
+  try { await api(signup ? "signup" : "login", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(payload) }); await boot(true); }
   catch (error) { $("#auth-error").textContent = error.message; }
   finally { busy = false; button.disabled = false; }
 });
