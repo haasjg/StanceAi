@@ -8,7 +8,8 @@ Live app: https://stanceai.haasjg.workers.dev
 
 - Email and password sign-in with salted PBKDF2 password hashes, server-side sessions, and basic IP-based attempt limits.
 - Multiple saved conversations per account, with automatic titles, rename/delete controls, and separate chat history. Existing messages are kept in an "Earlier conversation" when upgrading.
-- Private chat history and per-user documents in D1.
+- Projects/matters that keep conversations and source documents in separate private workspaces. Existing content is carried into "My workspace" when upgrading.
+- Private chat history and per-user documents in D1, with source preview and per-chat source selection.
 - Workers AI chat using `@cf/meta/llama-3.1-8b-instruct-fp8`, capped at 20 responses per account per day.
 - `.txt`, `.md`, and `.csv` source files, up to 25 KB each; ten files / 250 KB total per account.
 - Responsive single-page interface.
