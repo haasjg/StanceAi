@@ -114,6 +114,11 @@ async function handleApi(request, env) {
     const docs = await env.DB.prepare("SELECT id, name, created_at FROM documents WHERE user_id = ? ORDER BY created_at DESC").bind(user.id).all();
     return json({ documents: docs.results });
   }
+  if (request.method === "GET" && path.startsWith("/api/documents/")) {
+    const id = decodeURIComponent(path.slice("/api/documents/".length));
+    const document = await env.DB.prepare("SELECT id, name, body, created_at FROM documents WHERE id = ? AND user_id = ?").bind(id, user.id).first();
+    return document ? json({ document }) : fail("Document not found.", 404);
+  }
   if (request.method === "POST" && path === "/api/documents") {
     const form = await request.formData();
     const file = form.get("file");
@@ -146,11 +151,19 @@ async function handleApi(request, env) {
     const conversationId = String(input.conversationId || "");
     const conversation = await env.DB.prepare("SELECT id, title FROM conversations WHERE id = ? AND user_id = ?").bind(conversationId, user.id).first();
     if (!conversation) return fail("Choose a conversation before sending a message.");
+    const requestedDocumentIds = Array.isArray(input.documentIds) ? [...new Set(input.documentIds.map((id) => String(id)))] : null;
+    if (requestedDocumentIds?.length > 10) return fail("Choose no more than 10 source documents.");
+    const docs = requestedDocumentIds === null
+      ? await env.DB.prepare("SELECT name, body FROM documents WHERE user_id = ? ORDER BY created_at DESC LIMIT 10").bind(user.id).all()
+      : requestedDocumentIds.length
+        ? await env.DB.prepare(`SELECT name, body FROM documents WHERE user_id = ? AND id IN (${requestedDocumentIds.map(() => "?").join(",")}) ORDER BY created_at DESC`)
+          .bind(user.id, ...requestedDocumentIds).all()
+        : { results: [] };
+    if (requestedDocumentIds !== null && docs.results.length !== requestedDocumentIds.length) return fail("One or more selected source documents are no longer available.", 400);
     const today = new Date().toISOString().slice(0, 10);
     const reservation = await env.DB.prepare("INSERT INTO usage_daily (user_id, day, count) VALUES (?, ?, 1) ON CONFLICT(user_id, day) DO UPDATE SET count = count + 1 WHERE usage_daily.count < 20 RETURNING count")
       .bind(user.id, today).first();
     if (!reservation) return fail("You’ve reached today’s free message limit. Try again tomorrow.", 429);
-    const docs = await env.DB.prepare("SELECT name, body FROM documents WHERE user_id = ? ORDER BY created_at DESC LIMIT 10").bind(user.id).all();
     const recent = await env.DB.prepare("SELECT role, body FROM messages WHERE user_id = ? AND conversation_id = ? ORDER BY created_at DESC LIMIT 10").bind(user.id, conversationId).all();
     const documentContext = docs.results.map((doc) => `\n[${doc.name}]\n${doc.body}`).join("\n").slice(0, 18_000);
     const history = recent.results.reverse().map(({ role, body }) => ({ role, content: body }));
