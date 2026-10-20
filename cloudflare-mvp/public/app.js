@@ -4,6 +4,7 @@ const appScreen = $("#app-screen");
 let signup = false;
 let busy = false;
 let currentConversationId = "";
+let selectedDocumentIds = null;
 
 async function api(path, options = {}) {
   const response = await fetch(`/api/${path}`, { credentials: "same-origin", ...options });
@@ -29,10 +30,17 @@ function showApp() { authScreen.classList.add("hidden"); appScreen.classList.rem
 function showAuth() { appScreen.classList.add("hidden"); authScreen.classList.remove("hidden"); }
 async function loadDocuments() {
   const { documents } = await api("documents");
+  if (selectedDocumentIds === null) selectedDocumentIds = new Set(documents.map((doc) => doc.id));
+  else for (const id of selectedDocumentIds) if (!documents.some((doc) => doc.id === id)) selectedDocumentIds.delete(id);
   const list = $("#document-list"); list.replaceChildren();
   for (const doc of documents) {
     const li = document.createElement("li"); li.className = "document-item";
-    li.innerHTML = `<span class="file-icon">↳</span><span class="document-name" title="${escapeHTML(doc.name)}">${escapeHTML(doc.name)}</span><button type="button" class="remove-document" aria-label="Remove ${escapeHTML(doc.name)}">×</button>`;
+    li.innerHTML = `<input class="document-select" type="checkbox" aria-label="Use ${escapeHTML(doc.name)} in chat" ${selectedDocumentIds.has(doc.id) ? "checked" : ""}><span class="file-icon" aria-hidden="true">↳</span><button type="button" class="document-name" title="Preview ${escapeHTML(doc.name)}">${escapeHTML(doc.name)}</button><button type="button" class="remove-document" aria-label="Remove ${escapeHTML(doc.name)}">×</button>`;
+    li.querySelector(".document-select").addEventListener("change", (event) => { if (event.target.checked) selectedDocumentIds.add(doc.id); else selectedDocumentIds.delete(doc.id); });
+    li.querySelector(".document-name").addEventListener("click", async () => {
+      try { const { document } = await api(`documents/${encodeURIComponent(doc.id)}`); $("#document-preview-name").textContent = document.name; $("#document-preview-body").textContent = document.body; $("#document-preview").showModal(); }
+      catch (error) { showToast(error.message); }
+    });
     li.querySelector("button").addEventListener("click", async () => {
       try { await api(`documents/${encodeURIComponent(doc.id)}`, { method: "DELETE" }); await loadDocuments(); showToast("Document removed."); }
       catch (error) { showToast(error.message); }
@@ -124,10 +132,11 @@ $("#chat-form").addEventListener("submit", async (event) => {
   input.value = ""; addMessage("user", prompt); busy = true;
   const button = $("#send-button"); button.disabled = true;
   const thinking = document.createElement("p"); thinking.className = "thinking"; thinking.textContent = "Thinking through it…"; $("#messages").append(thinking);
-  try { const result = await api("chat", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ message: prompt, conversationId: currentConversationId }) }); thinking.remove(); addMessage("assistant", result.answer); $("#usage-label").textContent = `${result.remaining} free messages left today`; await renderConversations(); }
+  try { const result = await api("chat", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ message: prompt, conversationId: currentConversationId, documentIds: [...selectedDocumentIds] }) }); thinking.remove(); addMessage("assistant", result.answer); $("#usage-label").textContent = `${result.remaining} free messages left today`; await renderConversations(); }
   catch (error) { thinking.remove(); addMessage("assistant", error.message); }
   finally { busy = false; button.disabled = false; input.focus(); }
 });
 $("#messages").addEventListener("click", (event) => { const button = event.target.closest("[data-prompt]"); if (button) { $("#chat-input").value = button.dataset.prompt; $("#chat-input").focus(); } });
+$("#close-document-preview").addEventListener("click", () => $("#document-preview").close());
 $("#chat-input").addEventListener("input", (event) => { event.target.style.height = "auto"; event.target.style.height = `${Math.min(event.target.scrollHeight, 180)}px`; });
 boot();
