@@ -2,9 +2,11 @@
 
 A standalone Cloudflare Worker app. It does not change the MostlyBuilt site or its Worker. The app is designed for Cloudflare's free Worker, D1, and Workers AI quotas.
 
+Live app: https://stanceai.haasjg.workers.dev
+
 ## Included
 
-- Email and password sign-in with salted PBKDF2 password hashes and server-side sessions.
+- Email and password sign-in with salted PBKDF2 password hashes, server-side sessions, and basic IP-based attempt limits.
 - Private chat history and per-user documents in D1.
 - Workers AI chat using `@cf/meta/llama-3.1-8b-instruct-fp8`, capped at 20 responses per account per day.
 - `.txt`, `.md`, and `.csv` source files, up to 25 KB each; ten files / 250 KB total per account.
@@ -18,7 +20,7 @@ Requirements: Node.js 22+ and Wrangler. From this directory:
 
 1. Log into the Cloudflare account with `npx wrangler login`.
 2. Create the free D1 database named `stanceai`: `npx wrangler d1 create stanceai`.
-3. Copy the database ID from that result into `wrangler.jsonc`, replacing `REPLACE_WITH_D1_DATABASE_ID`.
+3. Put the database ID in `wrangler.jsonc`.
 4. Initialize the database: `npx wrangler d1 migrations apply stanceai --remote`.
 5. Deploy the separate Worker: `npx wrangler deploy`.
 
