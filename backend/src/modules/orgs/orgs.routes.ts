@@ -41,6 +41,9 @@ import {
     cancelInvitation,
     resendInvitation,
     getOrgApiKeySettings,
+    listOrgApiTokens,
+    createOrgApiToken,
+    revokeOrgApiToken,
     saveOrgApiKey,
     setOrgApiKeyEnabled,
     setOrgPersonalApiKeysAllowed,
@@ -462,6 +465,55 @@ orgsRouter.get("/:orgId/api-keys", requireOrgAuth, asyncRoute(async (req, res) =
     if (!result.ok) return sendOrgFailure(res, result);
     res.json(result.settings);
 }));
+
+// Customer integration tokens are organization-scoped and only visible to
+// admins. The raw token is returned once by POST and is never stored.
+orgsRouter.get(
+    "/:orgId/api-tokens",
+    requireOrgAuth,
+    asyncRoute(async (req, res) => {
+        const result = await listOrgApiTokens(createServerSupabase(), {
+            actorId: res.locals.userId as string,
+            orgId: req.params.orgId,
+        });
+        if (!result.ok) return sendOrgFailure(res, result);
+        res.json({ tokens: result.tokens });
+    }),
+);
+
+orgsRouter.post(
+    "/:orgId/api-tokens",
+    requireOrgAuth,
+    requireMfaIfEnrolled,
+    asyncRoute(async (req, res) => {
+        const result = await createOrgApiToken(createServerSupabase(), {
+            actorId: res.locals.userId as string,
+            actorEmail: res.locals.userEmail as string | undefined,
+            orgId: req.params.orgId,
+            name: req.body?.name,
+            scopes: req.body?.scopes,
+            expiresAt: req.body?.expires_at,
+        });
+        if (!result.ok) return sendOrgFailure(res, result);
+        res.status(201).json(result);
+    }),
+);
+
+orgsRouter.delete(
+    "/:orgId/api-tokens/:tokenId",
+    requireOrgAuth,
+    requireMfaIfEnrolled,
+    asyncRoute(async (req, res) => {
+        const result = await revokeOrgApiToken(createServerSupabase(), {
+            actorId: res.locals.userId as string,
+            actorEmail: res.locals.userEmail as string | undefined,
+            orgId: req.params.orgId,
+            tokenId: req.params.tokenId,
+        });
+        if (!result.ok) return sendOrgFailure(res, result);
+        res.json(result);
+    }),
+);
 
 // PUT /orgs/:orgId/api-keys/policy — whether members' own keys may be used
 // for a provider the organization has no key for (owner or admin).

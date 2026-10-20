@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
+import { withAppBasePath } from "@/shared/lib/appBasePath";
 import { useQueryParamTab } from "@/app/hooks/useQueryParamTab";
 import {
   AlertCircle,
@@ -1239,7 +1240,10 @@ function PlaybooksWorkspace() {
             ) : (
               <p className="text-sm text-amber-700">
                 No compilation model is available.{" "}
-                <a href="/account/api-keys" className="underline">
+                <a
+                  href={withAppBasePath("/account/api-keys")}
+                  className="underline"
+                >
                   Configure an API key
                 </a>{" "}
                 or enable a local model.
@@ -1424,7 +1428,10 @@ function PlaybooksWorkspace() {
             ) : (
               <p className="text-sm text-amber-700">
                 No review model is available.{" "}
-                <a href="/account/api-keys" className="underline">
+                <a
+                  href={withAppBasePath("/account/api-keys")}
+                  className="underline"
+                >
                   Configure an API key
                 </a>{" "}
                 or enable a local model.

@@ -3,41 +3,44 @@ import type { Metadata } from "next";
 import "./fonts/fonts.css";
 import "./globals.css";
 import { Providers } from "@/app/components/providers";
+import { withAppBasePath } from "@/shared/lib/appBasePath";
+
+const appUrl = new URL("https://mostlybuilt.com/stanceai");
 
 export const metadata: Metadata = {
-    metadataBase: new URL("https://app.mikeoss.com"),
-    title: "Mike - Legal AI Platform",
+    metadataBase: appUrl,
+    title: "StanceAI - Legal Intelligence Platform",
     description:
         "AI-powered legal document analysis and contract review platform.",
     icons: {
         icon: [
-            { url: "/icon.svg", type: "image/svg+xml" },
-            { url: "/favicon.ico" },
+            { url: withAppBasePath("/icon.svg"), type: "image/svg+xml" },
+            { url: withAppBasePath("/favicon.ico") },
         ],
-        apple: "/apple-touch-icon.png",
+        apple: withAppBasePath("/apple-touch-icon.png"),
     },
     openGraph: {
         type: "website",
-        url: "https://app.mikeoss.com",
-        siteName: "Mike",
-        title: "Mike - Legal AI Platform",
+        url: "https://mostlybuilt.com/stanceai",
+        siteName: "StanceAI",
+        title: "StanceAI - Legal Intelligence Platform",
         description:
             "AI-powered legal document analysis and contract review platform.",
         images: [
             {
-                url: "/link-image.jpg",
+                url: withAppBasePath("/link-image.jpg"),
                 width: 1200,
                 height: 651,
-                alt: "Mike",
+                alt: "StanceAI",
             },
         ],
     },
     twitter: {
         card: "summary_large_image",
-        title: "Mike - Legal AI Platform",
+        title: "StanceAI - Legal Intelligence Platform",
         description:
             "AI-powered legal document analysis and contract review platform.",
-        images: ["/link-image.jpg"],
+        images: [withAppBasePath("/link-image.jpg")],
     },
 };
 
