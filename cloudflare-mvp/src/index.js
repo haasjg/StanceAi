@@ -63,6 +63,7 @@ async function handleApi(request, env) {
       const user = { id: uuid(), email };
       const salt = randomHex();
       await env.DB.prepare("INSERT INTO users (id, email, salt, password_hash) VALUES (?, ?, ?, ?)").bind(user.id, email, salt, await passwordHash(password, salt)).run();
+      await env.DB.prepare("INSERT INTO conversations (id, user_id, title) VALUES (?, ?, 'New conversation')").bind(uuid(), user.id).run();
       return issueSession(user, env);
     }
     const user = await env.DB.prepare("SELECT id, email, salt, password_hash FROM users WHERE email = ?").bind(email).first();
@@ -73,6 +74,36 @@ async function handleApi(request, env) {
 
   const user = await userFor(request, env);
   if (!user) return fail("Please sign in to continue.", 401);
+  if (request.method === "GET" && path === "/api/conversations") {
+    let conversations = await env.DB.prepare("SELECT id, title, created_at, updated_at FROM conversations WHERE user_id = ? ORDER BY updated_at DESC LIMIT 50").bind(user.id).all();
+    if (!conversations.results.length) {
+      await env.DB.prepare("INSERT INTO conversations (id, user_id, title) VALUES (?, ?, 'New conversation')").bind(uuid(), user.id).run();
+      conversations = await env.DB.prepare("SELECT id, title, created_at, updated_at FROM conversations WHERE user_id = ? ORDER BY updated_at DESC LIMIT 50").bind(user.id).all();
+    }
+    return json({ conversations: conversations.results });
+  }
+  if (request.method === "POST" && path === "/api/conversations") {
+    const id = uuid();
+    await env.DB.prepare("INSERT INTO conversations (id, user_id, title) VALUES (?, ?, 'New conversation')").bind(id, user.id).run();
+    return json({ conversation: { id, title: "New conversation" } }, 201);
+  }
+  if (path.startsWith("/api/conversations/")) {
+    const id = decodeURIComponent(path.slice("/api/conversations/".length));
+    const conversation = await env.DB.prepare("SELECT id FROM conversations WHERE id = ? AND user_id = ?").bind(id, user.id).first();
+    if (!conversation) return fail("Conversation not found.", 404);
+    if (request.method === "PATCH") {
+      let input;
+      try { input = await request.json(); } catch { return fail("Enter a conversation title."); }
+      const title = String(input.title || "").trim().slice(0, 80);
+      if (!title) return fail("Conversation titles cannot be empty.");
+      await env.DB.prepare("UPDATE conversations SET title = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND user_id = ?").bind(title, id, user.id).run();
+      return json({ ok: true, title });
+    }
+    if (request.method === "DELETE") {
+      await env.DB.prepare("DELETE FROM conversations WHERE id = ? AND user_id = ?").bind(id, user.id).run();
+      return json({ ok: true });
+    }
+  }
   if (request.method === "POST" && path === "/api/logout") {
     const token = cookieValue(request, "stance_session");
     await env.DB.prepare("DELETE FROM sessions WHERE token_hash = ?").bind(await hash(token)).run();
@@ -101,7 +132,10 @@ async function handleApi(request, env) {
     return json({ ok: true });
   }
   if (request.method === "GET" && path === "/api/messages") {
-    const messages = await env.DB.prepare("SELECT role, body, created_at FROM messages WHERE user_id = ? ORDER BY created_at DESC LIMIT 40").bind(user.id).all();
+    const conversationId = new URL(request.url).searchParams.get("conversationId") || "";
+    const conversation = await env.DB.prepare("SELECT id FROM conversations WHERE id = ? AND user_id = ?").bind(conversationId, user.id).first();
+    if (!conversation) return fail("Conversation not found.", 404);
+    const messages = await env.DB.prepare("SELECT role, body, created_at FROM messages WHERE user_id = ? AND conversation_id = ? ORDER BY created_at DESC LIMIT 40").bind(user.id, conversationId).all();
     return json({ messages: messages.results.reverse() });
   }
   if (request.method === "POST" && path === "/api/chat") {
@@ -109,12 +143,15 @@ async function handleApi(request, env) {
     try { input = await request.json(); } catch { return fail("Enter a message to continue."); }
     const prompt = String(input.message || "").trim();
     if (!prompt || prompt.length > 4_000) return fail("Messages must be between 1 and 4,000 characters.");
+    const conversationId = String(input.conversationId || "");
+    const conversation = await env.DB.prepare("SELECT id, title FROM conversations WHERE id = ? AND user_id = ?").bind(conversationId, user.id).first();
+    if (!conversation) return fail("Choose a conversation before sending a message.");
     const today = new Date().toISOString().slice(0, 10);
     const reservation = await env.DB.prepare("INSERT INTO usage_daily (user_id, day, count) VALUES (?, ?, 1) ON CONFLICT(user_id, day) DO UPDATE SET count = count + 1 WHERE usage_daily.count < 20 RETURNING count")
       .bind(user.id, today).first();
     if (!reservation) return fail("You’ve reached today’s free message limit. Try again tomorrow.", 429);
     const docs = await env.DB.prepare("SELECT name, body FROM documents WHERE user_id = ? ORDER BY created_at DESC LIMIT 10").bind(user.id).all();
-    const recent = await env.DB.prepare("SELECT role, body FROM messages WHERE user_id = ? ORDER BY created_at DESC LIMIT 10").bind(user.id).all();
+    const recent = await env.DB.prepare("SELECT role, body FROM messages WHERE user_id = ? AND conversation_id = ? ORDER BY created_at DESC LIMIT 10").bind(user.id, conversationId).all();
     const documentContext = docs.results.map((doc) => `\n[${doc.name}]\n${doc.body}`).join("\n").slice(0, 18_000);
     const history = recent.results.reverse().map(({ role, body }) => ({ role, content: body }));
     const aiResponse = await env.AI.run(MODEL, {
@@ -126,8 +163,10 @@ async function handleApi(request, env) {
     });
     const answer = (aiResponse.response || "I couldn’t create a response. Please try again.").slice(0, 8_000);
     await env.DB.batch([
-      env.DB.prepare("INSERT INTO messages (id, user_id, role, body) VALUES (?, ?, 'user', ?)").bind(uuid(), user.id, prompt),
-      env.DB.prepare("INSERT INTO messages (id, user_id, role, body) VALUES (?, ?, 'assistant', ?)").bind(uuid(), user.id, answer),
+      env.DB.prepare("INSERT INTO messages (id, user_id, conversation_id, role, body) VALUES (?, ?, ?, 'user', ?)").bind(uuid(), user.id, conversationId, prompt),
+      env.DB.prepare("INSERT INTO messages (id, user_id, conversation_id, role, body) VALUES (?, ?, ?, 'assistant', ?)").bind(uuid(), user.id, conversationId, answer),
+      env.DB.prepare("UPDATE conversations SET title = CASE WHEN title = 'New conversation' THEN ? ELSE title END, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND user_id = ?")
+        .bind(prompt.replace(/\s+/g, " ").slice(0, 64) || "New conversation", conversationId, user.id),
     ]);
     return json({ answer, remaining: 20 - reservation.count });
   }
