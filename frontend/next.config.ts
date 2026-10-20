@@ -3,6 +3,12 @@ import { withSentryConfig } from "@sentry/nextjs/config";
 
 const nextConfig: NextConfig = {
     /* config options here */
+    // The public StanceAI instance is mounted below the existing site at
+    // /stanceai. Next.js bakes basePath into the client bundle, so this must
+    // be supplied at build time (and may stay empty for local development).
+    ...(process.env.NEXT_PUBLIC_BASE_PATH
+        ? { basePath: process.env.NEXT_PUBLIC_BASE_PATH.replace(/\/$/, "") }
+        : {}),
     // Standalone output emits a self-contained server (server.js + traced
     // node_modules) that runs without the repo — the desktop app bundles it
     // and runs it under Electron's own Node. Opt-in so the Docker image and

@@ -103,7 +103,12 @@ function frontendUrl(path = "/settings/connectors") {
         /\/+$/,
         "",
     );
-    return `${base}${path}`;
+    const basePath = (process.env.FRONTEND_BASE_PATH ?? "").replace(/\/+$/, "");
+    const prefixedPath =
+        basePath && (path === basePath || path.startsWith(`${basePath}/`))
+            ? path
+            : `${basePath}${path}`;
+    return `${base}${prefixedPath}`;
 }
 
 function shortHash(value: string) {
