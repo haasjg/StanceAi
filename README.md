@@ -4,9 +4,6 @@ drafting, and legal research.
 It combines a Next.js frontend, an Express backend, Supabase Auth/Postgres,
 and Cloudflare R2-compatible object storage.
 
-Website: [mikeoss.com](https://mikeoss.com)
-
-![Mike assistant home screen](docs/assets/mike-home.png)
 
 ## Features
 
@@ -20,7 +17,7 @@ Website: [mikeoss.com](https://mikeoss.com)
 
 ## Quick start
 
-The included Docker Compose stack runs Mike, Supabase, RustFS object storage,
+The included Docker Compose stack runs Stance, Supabase, RustFS object storage,
 and local email capture without requiring managed infrastructure.
 
 1. Copy the local environment templates:
@@ -58,7 +55,7 @@ authentication behavior, Ollama setup, and first-run guidance.
 
 ### Telemetry
 
-Mike sends scrubbed error reports (no document content, user identities, or
+stance sends scrubbed error reports (no document content, user identities, or
 request data) to the project's Sentry by default. Set `SENTRY_DISABLED=true` to
 opt out, or set `SENTRY_DSN` to use your own. See the
 [observability guide](docs/observability.md) for the exact policy, per-runtime
@@ -96,14 +93,14 @@ variables, and the [Sentry data audit](docs/sentry-data-audit.md).
 
 ## System workflows
 
-Mike's system assistant and tabular-review workflows are maintained in the
-[`Open-Legal-Products/mike-workflows`](https://github.com/Open-Legal-Products/mike-workflows)
+stance's system assistant and tabular-review workflows are maintained in the
+[`Open-Legal-Products/stance-workflows`](https://github.com/Open-Legal-Products/stance-workflows)
 repository. See [Contributing](CONTRIBUTING.md#system-workflows) for how they are
 packaged and synchronized with this application.
 
 ## License
 
-Mike is available under the [GNU Affero General Public License v3.0](LICENSE).
+stance is available under the [GNU Affero General Public License v3.0](LICENSE).
 Bundled [public contract templates](docs/preset-templates.md#maintaining-the-catalog)
 retain their publishers' separate licenses and notices.
 
@@ -111,7 +108,7 @@ retain their publishers' separate licenses and notices.
 
 Gmail and Calendar are separate, optional connections in **Settings → Connectors**.
 Google SSO never connects them automatically. Choose any permitted Google account
-for each service, including a different account from your Mike login. Read access
+for each service, including a different account from your stance login. Read access
 is the default; write permissions require a separate consent flow, and every
 send/edit/delete proposal requires explicit approval of its exact contents.
 See [setup, technical approach, limits, and manual acceptance tests](docs/google-workspace.md).
