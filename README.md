@@ -1,8 +1,4 @@
-# Mike
-
-![Mike](docs/assets/link-image.jpg)
-
-Mike (MikeOSS) is an open-source legal AI platform for document review,
+An open-source legal AI platform for document review,
 drafting, and legal research.
 
 It combines a Next.js frontend, an Express backend, Supabase Auth/Postgres,
