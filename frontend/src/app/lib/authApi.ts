@@ -1,3 +1,5 @@
+import { withAppBasePath } from "@/shared/lib/appBasePath";
+
 export interface AuthUser {
     id: string;
     email: string;
@@ -38,7 +40,7 @@ export class AuthApiError extends Error {
 }
 
 async function authRequest<T>(path: string, init?: RequestInit): Promise<T> {
-    const response = await fetch(`/api/auth${path}`, {
+    const response = await fetch(withAppBasePath(`/api/auth${path}`), {
         ...init,
         credentials: "include",
         cache: "no-store",

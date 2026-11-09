@@ -1,3 +1,5 @@
+import { withAppBasePath } from "@/shared/lib/appBasePath";
+
 export const AUTH_SESSION_INVALIDATED_EVENT = "mike:auth-session-invalidated";
 
 /**
@@ -8,7 +10,11 @@ export async function authenticatedFetch(
     input: RequestInfo | URL,
     init?: RequestInit,
 ): Promise<Response> {
-    const response = await globalThis.fetch(input, {
+    const requestInput =
+        typeof input === "string" && input.startsWith("/api")
+            ? withAppBasePath(input)
+            : input;
+    const response = await globalThis.fetch(requestInput, {
         ...init,
         credentials: "include",
     });

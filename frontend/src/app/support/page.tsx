@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { useAuth } from "@/app/contexts/AuthContext";
 import { FieldLabel } from "@/app/components/ui/form-field";
 import { authenticatedFetch } from "@/app/lib/authEvents";
+import { withAppBasePath } from "@/shared/lib/appBasePath";
 import { textButtonUIClassName } from "@/shared/ui/TextButtonUI.styles";
 import {
     describeError,
@@ -65,17 +66,20 @@ export default function SupportPage() {
         setIsSubmitting(true);
 
         try {
-            const response = await authenticatedFetch("/api/support", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    type: feedbackType,
-                    subject,
-                    message,
-                    email: user?.email,
-                    link,
-                }),
-            });
+            const response = await authenticatedFetch(
+                withAppBasePath("/api/support"),
+                {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        type: feedbackType,
+                        subject,
+                        message,
+                        email: user?.email,
+                        link,
+                    }),
+                },
+            );
 
             if (!response.ok) {
                 // Carry the status and request id so the failure can be

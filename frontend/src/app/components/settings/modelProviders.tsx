@@ -1,6 +1,7 @@
 import Image from "next/image";
 import { Plug, type LucideIcon } from "lucide-react";
 import type { ApiKeyProvider } from "@/app/lib/mikeApi";
+import { withAppBasePath } from "@/shared/lib/appBasePath";
 
 // The model providers a key can be saved for, in the order they are listed.
 // Shared by a person's Bring Your Own Keys page and an organization's Model
@@ -114,7 +115,7 @@ export function ModelProviderIcon({
         return <Icon aria-hidden="true" className="h-6 w-6 text-gray-500" />;
     return (
         <Image
-            src={`/icons/providers/${field.logo}.svg`}
+            src={withAppBasePath(`/icons/providers/${field.logo}.svg`)}
             alt=""
             width={28}
             height={28}

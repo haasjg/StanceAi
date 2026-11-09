@@ -3,6 +3,35 @@
 Use this path when connecting Mike to managed Supabase and S3-compatible
 storage instead of the infrastructure bundled with Docker Compose.
 
+## StanceAI under an existing website
+
+For the StanceAI deployment mounted at `https://mostlybuilt.com/stanceai`, set
+the following in the Compose `.env` before building:
+
+```dotenv
+FRONTEND_URL=https://mostlybuilt.com
+FRONTEND_BASE_PATH=/stanceai
+API_PUBLIC_URL=https://mostlybuilt.com/stanceai/api
+```
+
+Compose passes `FRONTEND_BASE_PATH` to the frontend Docker build as
+`NEXT_PUBLIC_BASE_PATH` and at runtime to the backend. Build-time configuration
+matters: changing the path requires rebuilding the frontend image. Keep
+`FRONTEND_URL` as the site origin; it is also used for origin checks. The
+public API URL includes the mount and `/api`, and must be reachable by OAuth
+providers. Configure the Supabase Auth site URL and redirect allow-list for
+the mounted application, including `/stanceai/auth/callback` and the reset
+password route.
+
+The site's reverse proxy must send `/stanceai` and `/stanceai/*` to the
+frontend while preserving the path. The frontend serves the app and proxies
+`/stanceai/api/*` to the private backend. Keep the backend port private. Also
+configure the live database, S3-compatible storage, SMTP, model provider
+credentials, OAuth clients, and production secrets before accepting users.
+
+The root `.env.example` intentionally keeps local-development defaults. Copy
+these production values into the deployment `.env`; do not commit secrets.
+
 ## Prerequisites
 
 - Node.js 22 or newer

@@ -75,7 +75,14 @@ function callbackUrl(
   fallback: string,
   path = "/auth/callback",
 ): string {
-  return buildCallbackUrl(requestOrigin(req), next, fallback, path);
+  const basePath = requestOriginIsWordAddin(req.get("origin"))
+    ? ""
+    : (process.env.FRONTEND_BASE_PATH ?? "").replace(/\/+$/, "");
+  const callbackPath =
+    basePath && (path === basePath || path.startsWith(`${basePath}/`))
+      ? path
+      : `${basePath}${path}`;
+  return buildCallbackUrl(requestOrigin(req), next, fallback, callbackPath);
 }
 
 function authError(

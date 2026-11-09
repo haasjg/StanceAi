@@ -8,6 +8,7 @@ import {
   type ReactNode,
 } from "react";
 import Image from "next/image";
+import { withAppBasePath } from "@/shared/lib/appBasePath";
 import { FolderPlus, Plus } from "lucide-react";
 import { ConnectorSetupGuideLink } from "@/app/components/settings/ConnectorSetupGuideLink";
 import { NewCustomMcpModal } from "@/app/components/settings/NewCustomMcpModal";
@@ -323,7 +324,7 @@ function GoogleConnectorIcon({
 }) {
   return (
     <Image
-      src={`/icons/integrations/${provider}.png`}
+      src={withAppBasePath(`/icons/integrations/${provider}.png`)}
       alt=""
       aria-hidden="true"
       width={20}
